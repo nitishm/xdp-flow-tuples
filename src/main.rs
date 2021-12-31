@@ -1,4 +1,5 @@
 use futures::stream::StreamExt;
+use std::ptr;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
@@ -26,15 +27,16 @@ async fn main() {
     loaded
         .xdp_mut("pktcapture")
         .expect("error on Loaded::xdp_mut")
-        .attach_xdp("eth0", xdp::Flags::default())
+        .attach_xdp("wlp0s20f3", xdp::Flags::default())
         .expect("error on XDP probe::attach_xdp");
 
     while let Some((map_name, events)) = loaded.events.next().await {
         if map_name == "FLOW_TUPLES" {
             for event in events {
-                let event = unsafe { &*(event.as_ptr() as *const MapData<FlowTuples>) };
+                // use ptr::read_unaligned if the pointer alignment is unsure
+                let event = unsafe { ptr::read_unaligned(event.as_ptr() as *const MapData<FlowTuples>) };
                 let info = event.data(); 
-                println!("SRC {} DST {}", info.src_ip, info.dest_ip);
+                println!("SRC {:?} DST {:?}", info.src_ip.to_le_bytes(), info.dest_ip.to_le_bytes());
             }
         }
     }
